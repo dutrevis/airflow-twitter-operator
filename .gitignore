@@ -1,0 +1,3 @@
+./pgdata/*
+.vscode
+*__pycache__*
