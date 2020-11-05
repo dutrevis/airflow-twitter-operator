@@ -139,7 +139,7 @@ case "$1" in
     done < <(env)
     # Creates an ADMIN default user when authentication is provided
     if [ $AIRFLOW__WEBSERVER__AUTHENTICATE = True ]; then
-      airflow create_user -r Admin -u $AIRFLOW_ADMIN_USERNAME -p $AIRFLOW_ADMIN_PASSWORD -e $AIRFLOW_ADMIN_EMAIL -f ${firstname:-${AIRFLOW_ADMIN_FIRSTNAME:-""}} -l ${lastname:-${AIRFLOW_ADMIN_LASTNAME :-""}}
+      airflow create_user -r Admin -u $AIRFLOW_ADMIN_USERNAME -p $AIRFLOW_ADMIN_PASSWORD -e $AIRFLOW_ADMIN_EMAIL -f ${firstname:-${AIRFLOW_ADMIN_FIRSTNAME:-""}} -l ${lastname:-${AIRFLOW_ADMIN_LASTNAME:-""}}
     fi
     exec airflow webserver
     ;;
