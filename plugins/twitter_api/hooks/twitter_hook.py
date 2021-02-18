@@ -1,6 +1,5 @@
 from airflow.hooks.base_hook import BaseHook
-from tweepy import auth, API, Cursor
-import tweepy
+from tweepy import auth, API, Cursor, TweepError
 
 
 class TwitterHook(BaseHook):
@@ -13,58 +12,20 @@ class TwitterHook(BaseHook):
         # Twitter custom connection
         self.conn_id = conn_id
         self.connection = self.get_connection(self.conn_id)
-        conn_extra = self.connection.extra_dejson
+        self.authorization_url = None
 
-        self.consumer_key = conn_extra['twitter_api_key']
-        self.consumer_secret = conn_extra['twitter_api_secret_key']
-        self.access_token = conn_extra.get('twitter_access_token')
-        self.access_token_secret = conn_extra.get('twitter_access_token_secret')
-        self.verifier = conn_extra.get('twitter_verifier')
-        self.redirect_url = None
-
-        self.auth = auth.OAuthHandler(
-            self.consumer_key,
-            self.consumer_secret
-        )
-        
-        # [BEGIN: First authentication process]
-        # See http://docs.tweepy.org/en/latest/auth_tutorial.html
-        if not self.access_token or not self.access_token_secret:
-            if not self.verifier:
-                self.redirect_url = self.auth.get_authorization_url()
-                raise tweepy.TweepError(f"Access tokens required for authentication.\n"
-                                        f"Proceed to '{self.redirect_url}', authorize the application "
-                                        f"and add the “verifier” number, that Twitter will supply, into "
-                                        f"'{conn_id}' Twitter connection.")
-            # [BEGIN: First authentication with verifier number]
-            else:
-                from airflow.settings import Session
-
-                self.auth.request_token['oauth_token_secret'] = self.verifier
-            
-                self.auth.get_access_token(self.verifier)
-                self.access_token = self.auth.access_token
-                self.access_token_secret = self.auth.access_token_secret
-                
-                conn_extra['twitter_access_token'] = self.access_token
-                conn_extra['twitter_access_token_secret'] = self.access_token_secret
-                self.connection.set_extra(conn_extra)
-                              
-                session = Session()
-                session.add(self.connection)
-                session.commit()
-
-                self.log.info(f'Connection {self.conn_id} updated with "twitter_access_token"'
-                              f'and "twitter_access_token_secret" values.')
-            # [END: First authentication with verifier number]
-        # [END: First authentication process]
-
-        self.auth.set_access_token(self.access_token, self.access_token_secret)
+        self.__authentication()
 
     def run(self,
             method,
             response_limit=0,
             extra_args={}):
+
+        if self.authorization_url:
+            raise TweepError(f"Access tokens required for authentication.\n"
+                            f"Proceed to {self.authorization_url} to authorize the application "
+                            f"and add the Twitter supplied “verifier” number "
+                            f"into '{self.conn_id}' Twitter connection.")
 
         api = API(
             self.auth,
@@ -78,3 +39,48 @@ class TwitterHook(BaseHook):
             response_data.append(t._json)
         
         return response_data
+
+    def __authentication(self):
+        # See http://docs.tweepy.org/en/latest/auth_tutorial.html
+
+        conn_extra = self.connection.extra_dejson
+
+        consumer_key = conn_extra['twitter_api_key']
+        consumer_secret = conn_extra['twitter_api_secret_key']
+        access_token = conn_extra.get('twitter_access_token')
+        access_token_secret = conn_extra.get('twitter_access_token_secret')
+        verifier = conn_extra.get('twitter_verifier')
+        
+        self.auth = auth.OAuthHandler(consumer_key, consumer_secret)
+
+        # [BEGIN: First authentication process]
+        if not access_token or not access_token_secret:
+            if not verifier:
+                self.authorization_url = self.auth.get_authorization_url()
+            # [BEGIN: First authentication with verifier number]
+            else:
+                self.auth.request_token['oauth_token_secret'] = verifier
+                self.auth.get_access_token(verifier)
+
+                self.__update_conn_extra_tokens(self.auth, self.connection)
+            # [END: First authentication with verifier number]
+        # [END: First authentication process]
+
+        else:
+            self.auth.set_access_token(access_token, access_token_secret)
+
+    def __update_conn_extra_tokens(self, auth, connection):
+        from airflow.settings import Session
+
+        conn_extra = connection.extra_dejson
+
+        conn_extra['twitter_access_token'] = auth.access_token
+        conn_extra['twitter_access_token_secret'] = auth.access_token_secret
+        connection.set_extra(conn_extra)
+
+        session = Session()
+        session.add(connection)
+        session.commit()
+
+        self.log.info(f'Connection {connection.conn_id} updated with "twitter_access_token"'
+                      f'and "twitter_access_token_secret" values.')
