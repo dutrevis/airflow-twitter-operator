@@ -7,6 +7,7 @@
 from airflow.plugins_manager import AirflowPlugin
 from twitter_api.hooks.twitter_hook import TwitterHook
 from twitter_api.operators.twitter_operator import TwitterOperator
+from twitter_api.links.authorization_url import AuthorizationUrlLink
 
 
 class AirflowTwitterApiPlugin(AirflowPlugin):
@@ -22,4 +23,4 @@ class AirflowTwitterApiPlugin(AirflowPlugin):
     appbuilder_views = []
     appbuilder_menu_items = []
     global_operator_extra_links = []
-    operator_extra_links = []
+    operator_extra_links = [AuthorizationUrlLink(),]
