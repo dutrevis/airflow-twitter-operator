@@ -25,6 +25,9 @@ services:
             - redis
         environment:
             - EXECUTOR=Celery
+            - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+            - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@postgres/airflow
+            - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/1
         env_file:
             - ./env_file.env
         volumes:
@@ -49,6 +52,9 @@ services:
             - redis
         environment:
             - EXECUTOR=Celery
+            - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+            - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@postgres/airflow
+            - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/1
         env_file:
             - ./env_file.env
         volumes:
@@ -72,6 +78,9 @@ services:
             - ./requirements.txt:/requirements.txt
         environment:
             - EXECUTOR=Celery
+            - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+            - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@postgres/airflow
+            - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/1
         env_file:
             - ./env_file.env
         command: scheduler
@@ -89,6 +98,9 @@ services:
             - ./requirements.txt:/requirements.txt
         environment:
             - EXECUTOR=Celery
+            - AIRFLOW__CORE__EXECUTOR=CeleryExecutor
+            - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://airflow:airflow@postgres/airflow
+            - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/1
         env_file:
             - ./env_file.env
         command: worker
