@@ -10,7 +10,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 ENV TERM linux 
 
 # Airflow
-ARG AIRFLOW_VERSION=1.10.9
+ARG AIRFLOW_VERSION=1.10.15
 ARG AIRFLOW_USER_HOME=/usr/local/airflow
 ARG AIRFLOW_DEPS=""
 ENV AIRFLOW_HOME=${AIRFLOW_USER_HOME}
@@ -22,30 +22,30 @@ COPY ./entrypoint.sh /
 
 RUN set -e \
     && temp_dependencies=' \
-        libkrb5-dev \
-        libsasl2-dev \
-        libssl-dev \
-        libffi-dev \
-        libpq-dev \
-        git \
+    libkrb5-dev \
+    libsasl2-dev \
+    libssl-dev \
+    libffi-dev \
+    libpq-dev \
+    git \
     ' \
     && apt-get update -yqq \
     && apt-get upgrade -yqq \
     && apt-get install -yqq --no-install-recommends \
-        apt-utils \
-        build-essential \
-        default-libmysqlclient-dev \
-        curl \
-        rsync \
-        netcat \
-        locales \
-        python3-pip \
-        python3-dev \
-        python3-psycopg2 \
-        libpq-dev \
-        libaio1 \
-        libaio-dev \
-        $temp_dependencies \
+    apt-utils \
+    build-essential \
+    default-libmysqlclient-dev \
+    curl \
+    rsync \
+    netcat \
+    locales \
+    python3-pip \
+    python3-dev \
+    python3-psycopg2 \
+    libpq-dev \
+    libaio1 \
+    libaio-dev \
+    $temp_dependencies \
     && for i in $(seq 1 8); do mkdir -p "/usr/share/man/man${i}"; done \
     && apt-get install -yqq gnupg libpq5 postgresql-client \
     && sed -i 's/^# en_US.UTF-8 UTF-8$/en_US.UTF-8 UTF-8/g' /etc/locale.gen \
@@ -68,12 +68,12 @@ RUN set -e \
     && apt-get autoremove -yqq --purge \
     && apt-get clean \
     && rm -rf \
-        /var/lib/apt/lists/* \
-        /tmp/* \
-        /var/tmp/* \
-        /usr/share/man \
-        /usr/share/doc \
-        /usr/share/doc-base
+    /var/lib/apt/lists/* \
+    /tmp/* \
+    /var/tmp/* \
+    /usr/share/man \
+    /usr/share/doc \
+    /usr/share/doc-base
 
 USER airflow
 WORKDIR ${AIRFLOW_USER_HOME}
