@@ -1,5 +1,5 @@
 from airflow.hooks.base_hook import BaseHook
-from tweepy import auth, API, Cursor, TweepError
+from tweepy import auth, API, Cursor
 
 
 class TwitterHook(BaseHook):
@@ -22,10 +22,10 @@ class TwitterHook(BaseHook):
             extra_args={}):
 
         if self.authorization_url:
-            raise TweepError(f"Access tokens required for authentication.\n"
-                            f"Proceed to {self.authorization_url} to authorize the application "
-                            f"and add the Twitter supplied “verifier” number "
-                            f"into '{self.conn_id}' Twitter connection.")
+            raise ConnectionAbortedError(f"Access tokens required for authentication.\n"
+                                         f"Proceed to {self.authorization_url} to authorize the application "
+                                         f"and add the Twitter supplied “verifier” number "
+                                         f"into '{self.conn_id}' Twitter connection.")
 
         api = API(
             self.auth,
@@ -37,7 +37,7 @@ class TwitterHook(BaseHook):
 
         for t in Cursor(getattr(api, method), **extra_args).items(response_limit):
             response_data.append(t._json)
-        
+
         return response_data
 
     def __authentication(self):
@@ -50,7 +50,7 @@ class TwitterHook(BaseHook):
         access_token = conn_extra.get('twitter_access_token')
         access_token_secret = conn_extra.get('twitter_access_token_secret')
         verifier = conn_extra.get('twitter_verifier')
-        
+
         self.auth = auth.OAuthHandler(consumer_key, consumer_secret)
 
         # [BEGIN: First authentication process]
