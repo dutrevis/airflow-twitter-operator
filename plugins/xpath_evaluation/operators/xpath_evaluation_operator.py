@@ -17,24 +17,22 @@
 # under the License.
 
 from datetime import datetime
-from typing import Any, Callable, FrozenSet, Iterable, Optional, Union
+from dateutil import parser
 
 import requests
-from airflow.sensors.base_sensor_operator import BaseSensorOperator
-from airflow.operators.python_operator import ShortCircuitOperator
-from dateutil import parser
 from lxml import html
+from airflow.operators.python_operator import ShortCircuitOperator
 
-from version_check.links.changelog_url import ChangelogUrlLink
+from xpath_evaluation.links.evaluated_url import EvaluatedUrlLink
 
 
-class VersionCheckOperator(ShortCircuitOperator):
+class XPathEvaluationOperator(ShortCircuitOperator):
     """
     Waits for a different DAG or a task in a different DAG to complete for a
     specific execution_date
 
-    :param changelog_url: The dag_id that contains the task you want to
-    :type changelog_url: str
+    :param evaluated_url: The dag_id that contains the task you want to
+    :type evaluated_url: str
     :param xpath: The task_id that contains the task you want to
         wait for. 
     :type xpath: str or None
@@ -45,62 +43,62 @@ class VersionCheckOperator(ShortCircuitOperator):
     :type warning_message_days: int
     """
 
-    template_fields = ['changelog_url', 'xpath']
+    template_fields = ['evaluated_url', 'xpath']
 
     ui_color = '#19647e'
 
     operator_extra_links = (
-        ChangelogUrlLink(),
+        EvaluatedUrlLink(),
     )
 
     MAX_DEPRECATION_DIFF_SEC = 3600
 
     def __init__(self,
-                 changelog_url,
+                 evaluated_url,
                  xpath,
                  version=None,
                  warning_message_days: int = 1,
+                 soft_fail_on_evaluation: bool = False,
+                 soft_fail_on_not_found: bool = True,
                  *args, **kwargs):
         kwargs["python_callable"] = self._python_callable
         kwargs["provide_context"] = True
+        kwargs["soft_fail"] = True
         super().__init__(*args, **kwargs)
-        self.changelog_url = changelog_url
+        self.evaluated_url = evaluated_url
         self.xpath = xpath
         self.version = version
         self.warning_message_days = warning_message_days
 
     def _python_callable(self, **kwargs):
-        kwargs["ti"].xcom_push(key="changelog_url",
-                               value=self.changelog_url)
+        kwargs["ti"].xcom_push(key="evaluated_url",
+                               value=self.evaluated_url)
 
-        self.log.info(
-            f"Searching '{self.changelog_url}' for objects in the given XPath...")
-        xpath_list = self._xpath_from_url(self.changelog_url, self.xpath)
-        self.log.info(f"Found {len(xpath_list)} objects")
-
+        xpath_list = self._xpath_from_url(self.evaluated_url, self.xpath)
         extracted_str = self._first_string_from_xpath_list(xpath_list)
         self.log.info(
             f"Using first object found '{extracted_str}' as actual value...")
 
         if self.version:
             self.log.info(
-                f"Validating actual value over the provided expected version '{self.version}'...")
+                f"Evaluating actual value over the provided expected version '{self.version}'...")
             return extracted_str == self.version
         self.log.warn(
-            "No expected version provided. Validating actual value over the current datetime...")
+            "No expected version provided. Evaluating actual value over the current datetime...")
 
         time_until_deprecation = self._time_diff_from_string(extracted_str)
         if time_until_deprecation.days <= self.warning_message_days:
             self._on_failure_callback(kwargs, log_level="WARN")
         return time_until_deprecation.total_seconds() > self.MAX_DEPRECATION_DIFF_SEC
 
-    @staticmethod
-    def _xpath_from_url(url, xpath):
+    def _xpath_from_url(self, url, xpath):
+        self.log.info(f"Searching '{url}' for objects in the given XPath...")
         response = requests.get(url)
         tree = html.fromstring(response.content)
         xpath_list = tree.xpath(xpath)
         if not xpath_list:
             raise ValueError(f"XPath '{xpath}' not found in '{url}'")
+        self.log.info(f"Found {len(xpath_list)} objects")
         return xpath_list
 
     @staticmethod

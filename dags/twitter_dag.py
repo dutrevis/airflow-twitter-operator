@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from airflow import DAG
 from airflow.operators.twitter_api import TwitterOperator
-from airflow.operators.version_check_operator import VersionCheckOperator
+from airflow.operators.xpath_evaluation_operator import XPathEvaluationOperator
 from airflow.utils.dates import days_ago
 
 default_args = {
@@ -17,11 +17,12 @@ dag = DAG(
     catchup=False
 )
 
-twitter_changelog_version_check = VersionCheckOperator(
+twitter_changelog_version_check = XPathEvaluationOperator(
     task_id='twitter_changelog_version_check',
     dag=dag,
-    changelog_url='https://developer.twitter.com/en/docs/twitter-ads-api/versioning',
-    xpath='//*[@id="twtr-main"]/div/div/div[2]/div/div[5]/div/div/div/div/div[2]/div[4]/div[2]/div/div/p'
+    evaluated_url='https://developer.twitter.com/en/docs/twitter-ads-api/versioning',
+    xpath='//*[@id="twtr-main"]/div/div/div[2]/div/div[5]/div/div/div/div/div[2]/div[4]/div[2]/div/div/p',
+    version='1.10.10'
 )
 
 twitter_hashtag_search_COVID19 = TwitterOperator(
