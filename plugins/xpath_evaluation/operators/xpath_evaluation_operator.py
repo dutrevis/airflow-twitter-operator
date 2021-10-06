@@ -99,6 +99,12 @@ class XPathEvaluationOperator(ShortCircuitOperator):
             f"Using first object found '{actual_value}' as actual value...")
 
         if isinstance(self.evaluated_value, str):
+            self.log.info(
+                "Comparing actual value '{}' to evaluated value '{}'...".format(
+                    actual_value,
+                    self.evaluated_value
+                )
+            )
             return actual_value == self.evaluated_value
 
         if isinstance(self.evaluated_value, datetime):
@@ -109,14 +115,22 @@ class XPathEvaluationOperator(ShortCircuitOperator):
 
             datetime_diff_sec = (parsed_datetime -
                                  self.evaluated_value).total_seconds()
-            if datetime_diff_sec <= self.warn_datetime_diff_sec:
+
+            if (self.on_warning_callback and datetime_diff_sec <= self.warn_datetime_diff_sec):
                 self.log.warn(
-                    "Diff seconds is of {}. Executing warning callback...".format(
-                        datetime_diff_sec
+                    "Actual diff seconds {} is less or equal than {}. Executing warning callback...".format(
+                        datetime_diff_sec,
+                        self.warn_datetime_diff_sec
                     )
                 )
                 self.on_warning_callback(kwargs)
 
+            self.log.info(
+                "Checking if actual diff seconds {} is higher than provided max diff seconds {}...".format(
+                    datetime_diff_sec,
+                    self.max_datetime_diff_sec
+                )
+            )
             return datetime_diff_sec > self.max_datetime_diff_sec
 
         raise ValueError(
