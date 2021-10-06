@@ -21,8 +21,7 @@ twitter_changelog_version_check = XPathEvaluationOperator(
     task_id='twitter_changelog_version_check',
     dag=dag,
     evaluated_url='https://developer.twitter.com/en/docs/twitter-ads-api/versioning',
-    xpath='//*[@id="twtr-main"]/div/div/div[2]/div/div[5]/div/div/div/div/div[2]/div[4]/div[2]/div/div/p',
-    version='1.10.10'
+    xpath='//*[@id="twtr-main"]/div/div/div[2]/div/div[5]/div/div/div/div/div[2]/div[4]/div[2]/div/div/p'
 )
 
 twitter_hashtag_search_COVID19 = TwitterOperator(

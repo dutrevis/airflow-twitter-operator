@@ -28,22 +28,30 @@ from xpath_evaluation.links.evaluated_url import EvaluatedUrlLink
 
 class XPathEvaluationOperator(ShortCircuitOperator):
     """
-    Waits for a different DAG or a task in a different DAG to complete for a
-    specific execution_date
-
-    :param evaluated_url: The dag_id that contains the task you want to
+    :param xpath: The XPath string used to retrieve HTML elements from the evaluated URL.
+    :type xpath: str
+    :param evaluated_url: The URL of the website where the XPath will be applied to retrieve
+        an element that will be evaluated.
     :type evaluated_url: str
-    :param xpath: The task_id that contains the task you want to
-        wait for. 
-    :type xpath: str or None
-    :param version: Iterable of allowed states, default is ``['success']``
-        If ``None`` (default value) the operator falls waits for the DAG
-    :type version: Iterable
-    :param warning_message_days: Iterable of failed or dis-allowed states, default is ``1``
-    :type warning_message_days: int
+    :param evaluated_value: String or Datetime object to be used as the expected value for
+        evaluation. When ``None`` value is provided, falls back to ``datetime.now()``.
+    :type evaluated_value: str or datetime
+    :param fail_on_not_found: defines the behavior for when XPath returns no elements.
+        Default is ``True``.
+    :type fail_on_not_found: boolean
+    :param max_datetime_diff_sec: maximum value of seconds that a datetime difference
+        evaluation may reach before failing the task. Default is ``0``.
+    :type max_datetime_diff_sec: int
+    :param warn_datetime_diff_sec: maximum value of seconds that a datetime difference
+        evaluation may reach before executing the warning callback. Default is ``24*3600``.
+    :type warn_datetime_diff_sec: int
+    :param on_warning_callback: function to be executed when ``warn_datetime_diff_sec`` is
+        equal or higher than the evaluated datetime difference. Receives the ``context`` arg.
+        Default is ``None``.
+    :type on_warning_callback: callable
     """
 
-    template_fields = ['evaluated_url', 'xpath']
+    template_fields = ['xpath', 'evaluated_url', 'evaluated_value']
 
     ui_color = '#19647e'
 
@@ -51,71 +59,85 @@ class XPathEvaluationOperator(ShortCircuitOperator):
         EvaluatedUrlLink(),
     )
 
-    MAX_DEPRECATION_DIFF_SEC = 3600
-
     def __init__(self,
-                 evaluated_url,
                  xpath,
-                 version=None,
-                 warning_message_days: int = 1,
-                 soft_fail_on_evaluation: bool = False,
-                 soft_fail_on_not_found: bool = True,
+                 evaluated_url,
+                 evaluated_value: str or datetime = None,
+                 fail_on_not_found: bool = True,
+                 max_datetime_diff_sec: int = 0,
+                 warn_datetime_diff_sec: int = 24*3600,
+                 on_warning_callback: callable = None,
                  *args, **kwargs):
-        kwargs["python_callable"] = self._python_callable
+        kwargs["python_callable"] = self._evaluate_xpath
         kwargs["provide_context"] = True
-        kwargs["soft_fail"] = True
         super().__init__(*args, **kwargs)
-        self.evaluated_url = evaluated_url
         self.xpath = xpath
-        self.version = version
-        self.warning_message_days = warning_message_days
+        self.evaluated_url = evaluated_url
+        self.evaluated_value = evaluated_value or datetime.now()
+        self.fail_on_not_found = fail_on_not_found
+        self.max_datetime_diff_sec = max_datetime_diff_sec
+        self.warn_datetime_diff_sec = warn_datetime_diff_sec
+        self.on_warning_callback = on_warning_callback
 
-    def _python_callable(self, **kwargs):
+    def _evaluate_xpath(self, **kwargs):
         kwargs["ti"].xcom_push(key="evaluated_url",
                                value=self.evaluated_url)
 
         xpath_list = self._xpath_from_url(self.evaluated_url, self.xpath)
-        extracted_str = self._first_string_from_xpath_list(xpath_list)
+
+        if not xpath_list:
+            not_found_log = f"No elements found with provided XPath in '{self.evaluated_url}'"
+
+            if self.fail_on_not_found:
+                raise Exception(not_found_log)
+
+            self.log.warn(not_found_log)
+            return True
+
+        actual_value = self._first_string_from_xpath_list(xpath_list)
         self.log.info(
-            f"Using first object found '{extracted_str}' as actual value...")
+            f"Using first object found '{actual_value}' as actual value...")
 
-        if self.version:
+        if isinstance(self.evaluated_value, str):
+            return actual_value == self.evaluated_value
+
+        if isinstance(self.evaluated_value, datetime):
             self.log.info(
-                f"Evaluating actual value over the provided expected version '{self.version}'...")
-            return extracted_str == self.version
-        self.log.warn(
-            "No expected version provided. Evaluating actual value over the current datetime...")
+                f"Parsing actual value '{actual_value}' as datetime...")
 
-        time_until_deprecation = self._time_diff_from_string(extracted_str)
-        if time_until_deprecation.days <= self.warning_message_days:
-            self._on_failure_callback(kwargs, log_level="WARN")
-        return time_until_deprecation.total_seconds() > self.MAX_DEPRECATION_DIFF_SEC
+            parsed_datetime = parser.parse(actual_value)
+
+            datetime_diff_sec = (parsed_datetime -
+                                 self.evaluated_value).total_seconds()
+            if datetime_diff_sec <= self.warn_datetime_diff_sec:
+                self.log.warn(
+                    "Diff seconds is of {}. Executing warning callback...".format(
+                        datetime_diff_sec
+                    )
+                )
+                self.on_warning_callback(kwargs)
+
+            return datetime_diff_sec > self.max_datetime_diff_sec
+
+        raise ValueError(
+            f"Evaluated value '{self.evaluated_value}' must be a string or a datetime object.")
 
     def _xpath_from_url(self, url, xpath):
         self.log.info(f"Searching '{url}' for objects in the given XPath...")
+
         response = requests.get(url)
         tree = html.fromstring(response.content)
         xpath_list = tree.xpath(xpath)
-        if not xpath_list:
-            raise ValueError(f"XPath '{xpath}' not found in '{url}'")
+
         self.log.info(f"Found {len(xpath_list)} objects")
+
         return xpath_list
 
     @staticmethod
     def _first_string_from_xpath_list(xpath_list):
-        if not xpath_list:
-            raise TypeError(f"Argument 'xpath_list' must be a non-empty list")
         extracted_element = xpath_list[0]
-        extracted_str = (extracted_element.text
-                         if type(extracted_element) == html.HtmlElement
-                         else extracted_element)
-        return extracted_str
+        actual_value = (extracted_element.text
+                        if type(extracted_element) == html.HtmlElement
+                        else extracted_element)
 
-    @staticmethod
-    def _time_diff_from_string(datetime_string):
-        parsed_datetime = parser.parse(datetime_string)
-        current_datetime = datetime.now()
-        return parsed_datetime - current_datetime
-
-    def _on_failure_callback(self, context, log_level="ERROR"):
-        print("error")
+        return actual_value
